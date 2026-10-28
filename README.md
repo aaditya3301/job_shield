@@ -2,9 +2,42 @@
 
 [![JobShield CI](https://github.com/aaditya3301/job_shield/actions/workflows/ci.yml/badge.svg)](https://github.com/aaditya3301/job_shield/actions/workflows/ci.yml)
 
-Detect potentially fraudulent job advertisements with TF-IDF and class-weighted Logistic Regression. Includes a trained Kaggle model, FastAPI inference, word-level model explanations, input validation, Docker health checks, and GitHub Actions that test the real model and running container.
+JobShield uses machine learning to flag potentially fraudulent job postings. Training and testing are completed in a Kaggle notebook; FastAPI serves predictions locally, and Docker packages the API and trained model.
 
-## Run locally (Windows PowerShell)
+## Dataset
+
+[Real or Fake Job Posting Prediction](https://www.kaggle.com/datasets/shivamb/real-or-fake-fake-jobposting-prediction) contains 17,880 job advertisements. The target column is `fraudulent`: `0` means genuine and `1` means fraudulent. Job title, description, and requirements are combined as model input. The dataset is imbalanced, with 866 fraudulent examples.
+
+## Model
+
+The Kaggle notebook trains a scikit-learn pipeline consisting of TF-IDF text vectorization and class-weighted Logistic Regression. It uses an 80/20 train/test split: 14,304 training records and 3,576 test records.
+
+| Component | Parameters |
+| --- | --- |
+| TF-IDF | English stop words, unigrams and bigrams, `min_df=2`, `max_features=12000`, `sublinear_tf=True` |
+| Logistic Regression | `class_weight="balanced"`, `C=1.0`, `penalty="l2"`, `solver="liblinear"`, `max_iter=700`, `random_state=42` |
+| Prediction | Fraud class `1`; decision threshold `0.5` |
+
+Test-set results: 97.01% overall accuracy; for the fraudulent class, 64.73% precision, 83.82% recall, and 0.7305 F1. Because the dataset is imbalanced, precision and recall help explain performance on fraudulent postings more clearly than accuracy alone.
+
+The trained pipeline and metadata are saved in `models/model.joblib`. `models/model_parameters.json` records configuration and evaluation results; `models/model_weights.npz` contains learned weights and TF-IDF features. `models/export_model_info.py` regenerates these exports.
+
+## Pipeline
+
+1. Select the Kaggle fake job posting dataset.
+2. Train and evaluate the model in a Kaggle notebook.
+3. Save the trained pipeline and its parameters in `models/`.
+4. Serve predictions with FastAPI from `app.py` in VS Code. The API returns a fraud score, risk level, and influential words.
+5. Build and run the API in Docker.
+6. Store the project in the [JobShield GitHub repository](https://github.com/aaditya3301/job_shield).
+7. GitHub Actions runs on pushes and pull requests. It runs the API tests, builds the Docker image, and checks the health and prediction endpoints.
+8. See the [GitHub Actions workflow](https://github.com/aaditya3301/job_shield/actions) for run status.
+
+## Run locally
+
+Requires Python 3.11 and Docker.
+
+In PowerShell, install dependencies and start the API:
 
 ```powershell
 python -m venv .venv
@@ -12,83 +45,13 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m uvicorn app:app --host 127.0.0.1 --port 8001
 ```
 
-Open http://localhost:8001/docs. Expand **POST /predict**, click **Try it out**, paste the example below and click **Execute**.
+Open http://localhost:8001/docs and try **POST /predict**.
 
-```json
-{
-  "title": "Work from home assistant",
-  "description": "Earn money immediately. No interview required. Pay a registration fee to start.",
-  "requirements": "No experience necessary. Send your bank account details today."
-}
-```
-
-Predictions are learned from the dataset; a hand-written suspicious example is not guaranteed to be flagged. The API reports the actual model result.
-
-## Run with Docker
+To build and run the Docker version:
 
 ```powershell
 docker build -t jobshield:latest .
-docker run -d --name jobshield-demo -p 127.0.0.1:8000:8000 jobshield:latest
-docker ps
-python scripts/smoke_test.py
+docker run --rm -p 8000:8000 jobshield:latest
 ```
 
-Open http://localhost:8000/docs. Use `docker logs jobshield-demo` to inspect startup. Use `docker stop jobshield-demo` when finished, and `docker start jobshield-demo` to resume it. Local Python uses port 8001 so both demonstrations can run together.
-
-## Endpoints
-
-| Endpoint | Purpose |
-| --- | --- |
-| `GET /docs` | Interactive API demo |
-| `POST /predict` | Fraud score, risk band, decision and influential words |
-| `GET /health` | Model readiness and SHA-256 fingerprint |
-| `GET /model-info` | Training metadata, evaluation metrics and thresholds |
-
-Input text joins `title`, `description`, `requirements` in that order, matching training. The model is loaded once during FastAPI startup. Fraud is class 1, with a decision threshold of 0.5. Presentation risk bands are Low below 0.30, Medium from 0.30 to below 0.70, and High at least 0.70; these bands are not separately validated.
-
-Explanations list active TF-IDF features multiplied by their Logistic Regression coefficients. Positive contributions increase the fraud log-odds; negative contributions reduce them. These are model associations, not proof of fraud. Raw probabilities have not been evaluated for calibration. Unrecognized vocabulary is explicitly disclosed.
-
-## Model and evaluation
-
-Dataset: [Kaggle Real or Fake Job Posting Prediction](https://www.kaggle.com/datasets/shivamb/real-or-fake-fake-jobposting-prediction). Training was performed in Kaggle before this repository was assembled.
-
-Metrics below come from metadata inside the user's trained `models/model.joblib`, not from rerunning the dataset locally. Training rows: 14,304. Test rows: 3,576.
-
-| Metric | Test result |
-| --- | ---: |
-| Accuracy | 97.01% |
-| Fraud precision | 64.73% |
-| Fraud recall | 83.82% |
-| Fraud F1 | 0.7305 |
-| ROC-AUC | 0.9764 |
-| Average precision | 0.8573 |
-
-Fraud is the minority class, so precision, recall and F1 are more useful than accuracy alone. The reported precision means some genuine advertisements will be flagged; this is a screening aid requiring human review. New scams or job markets may differ from the training data.
-
-The serialized artifact contains `pipeline` and `metadata`. Dependencies pin scikit-learn to the model's training version, 1.7.2. Only load trusted joblib artifacts.
-
-All model artifacts and their export script are in `models/`:
-
-- `models/model.joblib`: fitted vectorizer, classifier and metadata.
-- `models/model_parameters.json`: exported hyperparameters, original metrics and artifact fingerprint.
-- `models/model_weights.npz`: coefficients, intercept, feature names and IDF weights.
-- `models/export_model_info.py`: regenerate those exports from the saved model.
-
-## Tests and CI
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe models/export_model_info.py
-```
-
-Every push to `main` runs API tests, builds the Docker image, starts a container, and verifies both `/health` and `/predict`. See [GitHub Actions](https://github.com/aaditya3301/job_shield/actions). This workflow performs continuous integration; it does not deploy a public service or retrain the model.
-
-## Demonstration checklist
-
-1. Show Kaggle training output, classification report and confusion matrix. Save the notebook version and download its `.ipynb` for your submission.
-2. Show the saved model and `models/model_parameters.json`.
-3. Execute `/predict` in Swagger; explain the score and influential words.
-4. Show `docker ps`, container health and a prediction through port 8000.
-5. Open this repository's Actions tab and show the successful run.
-
-Runtime patterns follow [FastAPI lifespan documentation](https://fastapi.tiangolo.com/advanced/events/) and the [Docker Python guide](https://docs.docker.com/guides/python/).
+Open http://localhost:8000/docs. The API also provides `GET /health` and `GET /model-info`.
