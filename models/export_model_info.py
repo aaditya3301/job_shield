@@ -6,8 +6,8 @@ from pathlib import Path
 import joblib
 import numpy as np
 
-root = Path(__file__).resolve().parents[1]
-artifact_path = root / "model.joblib"
+model_dir = Path(__file__).resolve().parent
+artifact_path = model_dir / "model.joblib"
 artifact = joblib.load(artifact_path)
 pipeline = artifact["pipeline"]
 vectorizer = pipeline.named_steps["tfidf"]
@@ -22,6 +22,6 @@ configuration = {
     "decision_threshold": 0.5,
     "metrics_source": "Metadata saved during Kaggle training; not re-evaluated by this export.",
 }
-(root / "model_parameters.json").write_text(json.dumps(configuration, indent=2, default=str), encoding="utf-8")
-np.savez_compressed(root / "model_weights.npz", coefficients=classifier.coef_, intercept=classifier.intercept_, feature_names=vectorizer.get_feature_names_out(), idf=vectorizer.idf_)
+(model_dir / "model_parameters.json").write_text(json.dumps(configuration, indent=2, default=str), encoding="utf-8")
+np.savez_compressed(model_dir / "model_weights.npz", coefficients=classifier.coef_, intercept=classifier.intercept_, feature_names=vectorizer.get_feature_names_out(), idf=vectorizer.idf_)
 print(f"Exported parameters and {len(vectorizer.vocabulary_)} feature weights.")

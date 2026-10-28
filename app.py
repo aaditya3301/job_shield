@@ -12,7 +12,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 BASE_DIR = Path(__file__).resolve().parent
-MODEL_PATH = BASE_DIR / "model.joblib"
+MODEL_PATH = BASE_DIR / "models" / "model.joblib"
 
 
 @asynccontextmanager

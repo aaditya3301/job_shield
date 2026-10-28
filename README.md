@@ -8,7 +8,7 @@ Detect potentially fraudulent job advertisements with TF-IDF and class-weighted 
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m uvicorn app:app --host 127.0.0.1 --port 8001
 ```
 
@@ -52,7 +52,7 @@ Explanations list active TF-IDF features multiplied by their Logistic Regression
 
 Dataset: [Kaggle Real or Fake Job Posting Prediction](https://www.kaggle.com/datasets/shivamb/real-or-fake-fake-jobposting-prediction). Training was performed in Kaggle before this repository was assembled.
 
-Metrics below come from metadata inside the user's trained `model.joblib`, not from rerunning the dataset locally. Training rows: 14,304. Test rows: 3,576.
+Metrics below come from metadata inside the user's trained `models/model.joblib`, not from rerunning the dataset locally. Training rows: 14,304. Test rows: 3,576.
 
 | Metric | Test result |
 | --- | ---: |
@@ -67,16 +67,18 @@ Fraud is the minority class, so precision, recall and F1 are more useful than ac
 
 The serialized artifact contains `pipeline` and `metadata`. Dependencies pin scikit-learn to the model's training version, 1.7.2. Only load trusted joblib artifacts.
 
-- `model.joblib`: fitted vectorizer, classifier and metadata.
-- `model_parameters.json`: exported hyperparameters, original metrics and artifact fingerprint.
-- `model_weights.npz`: coefficients, intercept, feature names and IDF weights.
-- `scripts/export_model_info.py`: regenerate those exports from the saved model.
+All model artifacts and their export script are in `models/`:
+
+- `models/model.joblib`: fitted vectorizer, classifier and metadata.
+- `models/model_parameters.json`: exported hyperparameters, original metrics and artifact fingerprint.
+- `models/model_weights.npz`: coefficients, intercept, feature names and IDF weights.
+- `models/export_model_info.py`: regenerate those exports from the saved model.
 
 ## Tests and CI
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe scripts/export_model_info.py
+.\.venv\Scripts\python.exe models/export_model_info.py
 ```
 
 Every push to `main` runs API tests, builds the Docker image, starts a container, and verifies both `/health` and `/predict`. See [GitHub Actions](https://github.com/aaditya3301/job_shield/actions). This workflow performs continuous integration; it does not deploy a public service or retrain the model.
@@ -84,7 +86,7 @@ Every push to `main` runs API tests, builds the Docker image, starts a container
 ## Demonstration checklist
 
 1. Show Kaggle training output, classification report and confusion matrix. Save the notebook version and download its `.ipynb` for your submission.
-2. Show the saved model and `model_parameters.json`.
+2. Show the saved model and `models/model_parameters.json`.
 3. Execute `/predict` in Swagger; explain the score and influential words.
 4. Show `docker ps`, container health and a prediction through port 8000.
 5. Open this repository's Actions tab and show the successful run.

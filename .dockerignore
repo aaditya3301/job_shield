@@ -1,5 +1,6 @@
 *
 !app.py
-!model.joblib
+!models/
+!models/**
 !requirements.txt
 !Dockerfile
